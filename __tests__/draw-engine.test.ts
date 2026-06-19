@@ -47,4 +47,25 @@ describe('draw', () => {
       expect(giver).not.toBe(receiver)
     })
   })
+
+  it('respecte les paires exclues (historique)', () => {
+    // Avec 4 participants, il y a assez de permutations pour éviter une paire
+    const participants = ['Alice', 'Bob', 'Claire', 'David']
+    const excludePairs = [{ giver: 'Alice', receiver: 'Bob' }]
+    for (let i = 0; i < 50; i++) {
+      const result = draw(participants, { excludePairs })
+      const aliceAssignment = result.find(a => a.giver === 'Alice')
+      expect(aliceAssignment?.receiver).not.toBe('Bob')
+    }
+  })
+
+  it('respecte les exclusions case-insensitive', () => {
+    const participants = ['Alice', 'Bob', 'Claire', 'David']
+    const excludePairs = [{ giver: 'alice', receiver: 'bob' }]
+    for (let i = 0; i < 30; i++) {
+      const result = draw(participants, { excludePairs })
+      const aliceAssignment = result.find(a => a.giver === 'Alice')
+      expect(aliceAssignment?.receiver).not.toBe('Bob')
+    }
+  })
 })

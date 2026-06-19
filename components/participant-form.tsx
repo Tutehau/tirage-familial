@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, X, Shuffle } from 'lucide-react'
+import { Plus, X, Shuffle, History } from 'lucide-react'
 import { draw } from '@/lib/draw-engine'
 import { encodeAssignments } from '@/lib/encoding'
+import { getLastYearPairs, saveDrawToHistory } from '@/lib/history'
+import type { Assignment } from '@/lib/draw-engine'
 
 export function ParticipantForm() {
   const router = useRouter()
@@ -16,7 +18,14 @@ export function ParticipantForm() {
   const [inputValue, setInputValue] = useState('')
   const [participants, setParticipants] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [lastYearPairs, setLastYearPairs] = useState<Assignment[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const currentYear = new Date().getFullYear()
+
+  useEffect(() => {
+    setLastYearPairs(getLastYearPairs(currentYear))
+  }, [currentYear])
 
   function addParticipant() {
     const name = inputValue.trim()
@@ -43,10 +52,26 @@ export function ParticipantForm() {
     }
   }
 
+  // Paires de l'an dernier qui concernent les participants actuels
+  const relevantLastYearPairs = lastYearPairs.filter(
+    p =>
+      participants.some(n => n.toLowerCase() === p.giver.toLowerCase()) &&
+      participants.some(n => n.toLowerCase() === p.receiver.toLowerCase())
+  )
+
   function lancerTirage() {
     setError(null)
     try {
-      const assignments = draw(participants)
+      const assignments = draw(participants, {
+        excludePairs: relevantLastYearPairs,
+      })
+
+      saveDrawToHistory({
+        year: currentYear,
+        titre: title.trim() || `Tirage ${currentYear}`,
+        assignments,
+      })
+
       const token = encodeAssignments(assignments)
       const params = new URLSearchParams({ d: token })
       if (title.trim()) params.set('titre', title.trim())
@@ -64,7 +89,7 @@ export function ParticipantForm() {
         </CardHeader>
         <CardContent>
           <Input
-            placeholder="ex: Noël 2026"
+            placeholder={`ex: Noël ${currentYear}`}
             value={title}
             onChange={e => setTitle(e.target.value)}
             className="text-base"
@@ -127,6 +152,15 @@ export function ParticipantForm() {
           )}
         </CardContent>
       </Card>
+
+      {relevantLastYearPairs.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+          <History className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {relevantLastYearPairs.length} paire{relevantLastYearPairs.length > 1 ? 's' : ''} de l&apos;an dernier ({currentYear - 1}) seront évitées automatiquement.
+          </span>
+        </div>
+      )}
 
       <Button
         onClick={lancerTirage}
