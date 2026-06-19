@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { Gift, Search } from 'lucide-react'
+import { Gift, Search, Lock } from 'lucide-react'
 import type { Assignment } from '@/lib/draw-engine'
 import { findMyReceiver } from '@/lib/encoding'
 
@@ -25,12 +25,6 @@ export function RevealCard({ assignments }: { assignments: Assignment[] }) {
     if (e.key === 'Enter') chercher()
   }
 
-  function reset() {
-    setName('')
-    setReceiver(undefined)
-    setRevealed(false)
-  }
-
   if (revealed && receiver) {
     return (
       <Card className="overflow-hidden">
@@ -45,9 +39,10 @@ export function RevealCard({ assignments }: { assignments: Assignment[] }) {
           <p className="mt-4 text-sm opacity-75">Chut ! Ne dis rien à personne 🤫</p>
         </div>
         <CardContent className="pt-4">
-          <Button onClick={reset} variant="outline" className="w-full">
-            Voir un autre résultat
-          </Button>
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+            <Lock className="h-3.5 w-3.5" />
+            <span>Résultat de {name} — page personnelle</span>
+          </div>
         </CardContent>
       </Card>
     )
@@ -84,7 +79,7 @@ export function RevealCard({ assignments }: { assignments: Assignment[] }) {
 
         {receiver === null && (
           <p className="text-center text-sm text-red-500">
-            Prénom &quot;{name}&quot; non trouvé dans ce tirage. Vérifie l&apos;orthographe.
+            Prénom &quot;{name}&quot; non trouvé. Vérifie l&apos;orthographe.
           </p>
         )}
       </CardContent>
