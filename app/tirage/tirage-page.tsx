@@ -54,7 +54,7 @@ export function TiragePage() {
       <p className="mb-6 text-gray-500">{assignments.length} participants</p>
 
       <div className="space-y-6">
-        <RevealCard assignments={assignments} />
+        <RevealCard assignments={assignments} titre={titre || 'Tirage au sort'} />
         {shareUrl && <SharePanel url={shareUrl} />}
       </div>
     </main>

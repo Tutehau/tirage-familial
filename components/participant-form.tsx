@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, X, Shuffle, History } from 'lucide-react'
+import { Plus, X, Shuffle, History, Loader2 } from 'lucide-react'
 import { draw } from '@/lib/draw-engine'
 import { encodeAssignments } from '@/lib/encoding'
 import { getLastYearPairs, saveDrawToHistory } from '@/lib/history'
@@ -14,10 +14,12 @@ import type { Assignment } from '@/lib/draw-engine'
 
 export function ParticipantForm() {
   const router = useRouter()
-  const [title, setTitle] = useState('')
+  const [titre, setTitre] = useState('')
+  const [organizerEmail, setOrganizerEmail] = useState('')
   const [inputValue, setInputValue] = useState('')
   const [participants, setParticipants] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
   const [lastYearPairs, setLastYearPairs] = useState<Assignment[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -52,32 +54,55 @@ export function ParticipantForm() {
     }
   }
 
-  // Paires de l'an dernier qui concernent les participants actuels
   const relevantLastYearPairs = lastYearPairs.filter(
     p =>
       participants.some(n => n.toLowerCase() === p.giver.toLowerCase()) &&
       participants.some(n => n.toLowerCase() === p.receiver.toLowerCase())
   )
 
-  function lancerTirage() {
+  async function lancerTirage() {
     setError(null)
+
+    if (!organizerEmail.trim()) {
+      setError('L\'email de l\'organisateur est requis')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(organizerEmail.trim())) {
+      setError('Adresse email invalide')
+      return
+    }
+
+    setSending(true)
     try {
-      const assignments = draw(participants, {
-        excludePairs: relevantLastYearPairs,
-      })
+      const assignments = draw(participants, { excludePairs: relevantLastYearPairs })
+      const titreEffectif = titre.trim() || `Tirage ${currentYear}`
 
       saveDrawToHistory({
         year: currentYear,
-        titre: title.trim() || `Tirage ${currentYear}`,
+        titre: titreEffectif,
         assignments,
+      })
+
+      // Envoyer la liste complète à l'organisateur
+      await fetch('/api/envoyer-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'organizer',
+          organizerEmail: organizerEmail.trim(),
+          assignments,
+          titre: titreEffectif,
+        }),
       })
 
       const token = encodeAssignments(assignments)
       const params = new URLSearchParams({ d: token })
-      if (title.trim()) params.set('titre', title.trim())
+      params.set('titre', titreEffectif)
       router.push(`/tirage?${params.toString()}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors du tirage')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -90,10 +115,28 @@ export function ParticipantForm() {
         <CardContent>
           <Input
             placeholder={`ex: Noël ${currentYear}`}
-            value={title}
-            onChange={e => setTitle(e.target.value)}
+            value={titre}
+            onChange={e => setTitre(e.target.value)}
             className="text-base"
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg text-gray-700">Votre email (organisateur)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Input
+            type="email"
+            placeholder="contact@exemple.com"
+            value={organizerEmail}
+            onChange={e => setOrganizerEmail(e.target.value)}
+            className="text-base"
+          />
+          <p className="mt-2 text-xs text-gray-400">
+            Vous recevrez la liste complète du tirage par email.
+          </p>
         </CardContent>
       </Card>
 
@@ -122,9 +165,7 @@ export function ParticipantForm() {
             </Button>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-500">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-500">{error}</p>}
 
           {participants.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -164,12 +205,16 @@ export function ParticipantForm() {
 
       <Button
         onClick={lancerTirage}
-        disabled={participants.length < 2}
+        disabled={participants.length < 2 || sending}
         className="w-full bg-red-500 py-6 text-lg hover:bg-red-600 disabled:opacity-40"
       >
-        <Shuffle className="mr-2 h-5 w-5" />
-        Lancer le tirage
-        {participants.length >= 2 && ` (${participants.length} participants)`}
+        {sending ? (
+          <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Envoi en cours...</>
+        ) : (
+          <><Shuffle className="mr-2 h-5 w-5" />
+          Lancer le tirage
+          {participants.length >= 2 && ` (${participants.length} participants)`}</>
+        )}
       </Button>
 
       {participants.length === 1 && (

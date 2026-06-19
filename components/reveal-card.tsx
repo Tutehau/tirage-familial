@@ -4,28 +4,69 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { Gift, Search, Lock } from 'lucide-react'
+import { Gift, Lock, Loader2 } from 'lucide-react'
 import type { Assignment } from '@/lib/draw-engine'
 import { findMyReceiver } from '@/lib/encoding'
 
-export function RevealCard({ assignments }: { assignments: Assignment[] }) {
-  const [name, setName] = useState('')
-  const [receiver, setReceiver] = useState<string | null | undefined>(undefined)
-  const [revealed, setRevealed] = useState(false)
+type State =
+  | { status: 'idle' }
+  | { status: 'sending' }
+  | { status: 'revealed'; receiverName: string; participantName: string }
+  | { status: 'error'; message: string }
 
-  function chercher() {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    const found = findMyReceiver(assignments, trimmed)
-    setReceiver(found)
-    if (found) setRevealed(true)
+export function RevealCard({ assignments, titre }: { assignments: Assignment[]; titre: string }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState<State>({ status: 'idle' })
+
+  async function chercher() {
+    const trimmedName = name.trim()
+    const trimmedEmail = email.trim()
+
+    if (!trimmedName) {
+      setState({ status: 'error', message: 'Entre ton prénom.' })
+      return
+    }
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setState({ status: 'error', message: 'Entre une adresse email valide.' })
+      return
+    }
+
+    const receiverName = findMyReceiver(assignments, trimmedName)
+    if (!receiverName) {
+      setState({ status: 'error', message: `Prénom "${trimmedName}" non trouvé. Vérifie l'orthographe.` })
+      return
+    }
+
+    setState({ status: 'sending' })
+
+    try {
+      const res = await fetch('/api/envoyer-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'participant',
+          participantName: trimmedName,
+          participantEmail: trimmedEmail,
+          receiverName,
+          titre,
+        }),
+      })
+
+      if (!res.ok) throw new Error('Échec envoi email')
+
+      setState({ status: 'revealed', receiverName, participantName: trimmedName })
+    } catch {
+      // On affiche quand même le résultat même si l'email échoue
+      setState({ status: 'revealed', receiverName, participantName: trimmedName })
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') chercher()
   }
 
-  if (revealed && receiver) {
+  if (state.status === 'revealed') {
     return (
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-br from-red-400 to-red-600 p-8 text-center text-white">
@@ -35,13 +76,13 @@ export function RevealCard({ assignments }: { assignments: Assignment[] }) {
             </div>
           </div>
           <p className="mb-1 text-lg opacity-90">Tu offres un cadeau à...</p>
-          <p className="text-4xl font-bold">{receiver}</p>
-          <p className="mt-4 text-sm opacity-75">Chut ! Ne dis rien à personne 🤫</p>
+          <p className="text-4xl font-bold">{state.receiverName}</p>
+          <p className="mt-4 text-sm opacity-75">Un email de confirmation a été envoyé. Chut ! 🤫</p>
         </div>
         <CardContent className="pt-4">
           <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
             <Lock className="h-3.5 w-3.5" />
-            <span>Résultat de {name} — page personnelle</span>
+            <span>Résultat de {state.participantName} — page personnelle</span>
           </div>
         </CardContent>
       </Card>
@@ -55,33 +96,49 @@ export function RevealCard({ assignments }: { assignments: Assignment[] }) {
           <Gift className="mx-auto mb-3 h-10 w-10 text-red-400" />
           <h2 className="text-xl font-semibold text-gray-800">Qui est ton destinataire ?</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Entre ton prénom pour découvrir à qui tu offres un cadeau
+            Entre ton prénom et ton email pour découvrir à qui tu offres un cadeau
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <Input
-            placeholder="Ton prénom..."
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="text-base"
-            autoFocus
-          />
-          <Button
-            onClick={chercher}
-            className="bg-red-500 hover:bg-red-600"
-            aria-label="Chercher"
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        </div>
+        <Input
+          placeholder="Ton prénom..."
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="text-base"
+          autoFocus
+          disabled={state.status === 'sending'}
+        />
 
-        {receiver === null && (
-          <p className="text-center text-sm text-red-500">
-            Prénom &quot;{name}&quot; non trouvé. Vérifie l&apos;orthographe.
-          </p>
+        <Input
+          type="email"
+          placeholder="Ton adresse email..."
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="text-base"
+          disabled={state.status === 'sending'}
+        />
+
+        {state.status === 'error' && (
+          <p className="text-center text-sm text-red-500">{state.message}</p>
         )}
+
+        <Button
+          onClick={chercher}
+          disabled={state.status === 'sending'}
+          className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-40"
+        >
+          {state.status === 'sending' ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Envoi en cours...</>
+          ) : (
+            'Voir mon résultat et recevoir l\'email'
+          )}
+        </Button>
+
+        <p className="text-center text-xs text-gray-400">
+          Tu recevras un email de confirmation avec le nom de ton destinataire.
+        </p>
       </CardContent>
     </Card>
   )
