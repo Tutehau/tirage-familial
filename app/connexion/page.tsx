@@ -8,10 +8,19 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 
+// N'autorise que les chemins internes relatifs — un `next` du type
+// "https://evil.example" ou "//evil.example" (protocol-relative) redirigerait
+// hors du site après une connexion réussie sinon.
+function sanitizeNext(rawNext: string | null): string {
+  if (!rawNext) return '/'
+  if (!rawNext.startsWith('/') || rawNext.startsWith('//') || rawNext.startsWith('/\\')) return '/'
+  return rawNext
+}
+
 function ConnexionForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') || '/'
+  const next = sanitizeNext(searchParams.get('next'))
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

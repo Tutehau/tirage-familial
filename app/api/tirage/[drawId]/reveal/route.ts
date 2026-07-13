@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendParticipantResultEmail } from '@/lib/emails'
-import { hasNoLineBreaks } from '@/lib/validation'
+import { escapeLikePattern, hasNoLineBreaks } from '@/lib/validation'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ drawId: string }> }) {
   try {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dra
       .from('assignments')
       .select('id, giver_name, receiver_name, revealed_by')
       .eq('draw_id', drawId)
-      .ilike('giver_name', name)
+      .ilike('giver_name', escapeLikePattern(name))
       .maybeSingle()
 
     if (!match) {
