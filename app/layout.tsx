@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import './globals.css'
-import { OnboardingGate } from '@/components/onboarding-gate'
 import { Footer } from '@/components/footer'
 import { PwaInstall } from '@/components/pwa-install'
+import { UserBar } from '@/components/user-bar'
 import { siteConfig } from '@/lib/site-config'
 
 const geistSans = Geist({
@@ -41,9 +41,8 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${geistSans.variable} h-full antialiased`}>
       <body className="flex min-h-screen flex-col bg-gradient-to-br from-red-50 via-white to-green-50">
-        <div className="flex flex-1 flex-col">
-          <OnboardingGate>{children}</OnboardingGate>
-        </div>
+        <UserBar />
+        <div className="flex flex-1 flex-col">{children}</div>
         <Footer />
         <PwaInstall />
       </body>

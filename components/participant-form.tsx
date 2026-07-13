@@ -1,33 +1,23 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, X, Shuffle, History, Loader2 } from 'lucide-react'
-import { draw } from '@/lib/draw-engine'
-import { encodeAssignments } from '@/lib/encoding'
-import { getLastYearPairs, saveDrawToHistory } from '@/lib/history'
-import type { Assignment } from '@/lib/draw-engine'
+import { Plus, X, Shuffle, Loader2 } from 'lucide-react'
 
 export function ParticipantForm() {
   const router = useRouter()
   const [titre, setTitre] = useState('')
-  const [organizerEmail, setOrganizerEmail] = useState('')
   const [inputValue, setInputValue] = useState('')
   const [participants, setParticipants] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
-  const [lastYearPairs, setLastYearPairs] = useState<Assignment[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
   const currentYear = new Date().getFullYear()
-
-  useEffect(() => {
-    setLastYearPairs(getLastYearPairs(currentYear))
-  }, [currentYear])
 
   function addParticipant() {
     const name = inputValue.trim()
@@ -54,51 +44,21 @@ export function ParticipantForm() {
     }
   }
 
-  const relevantLastYearPairs = lastYearPairs.filter(
-    p =>
-      participants.some(n => n.toLowerCase() === p.giver.toLowerCase()) &&
-      participants.some(n => n.toLowerCase() === p.receiver.toLowerCase())
-  )
-
   async function lancerTirage() {
     setError(null)
-
-    if (!organizerEmail.trim()) {
-      setError('L\'email de l\'organisateur est requis')
-      return
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(organizerEmail.trim())) {
-      setError('Adresse email invalide')
-      return
-    }
-
     setSending(true)
     try {
-      const assignments = draw(participants, { excludePairs: relevantLastYearPairs })
-      const titreEffectif = titre.trim() || `Tirage ${currentYear}`
-
-      saveDrawToHistory({
-        year: currentYear,
-        titre: titreEffectif,
-        assignments,
-      })
-
-      // Envoyer la liste complète à l'organisateur
-      await fetch('/api/envoyer-email', {
+      const res = await fetch('/api/tirage/creer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'organizer',
-          organizerEmail: organizerEmail.trim(),
-          assignments,
-          titre: titreEffectif,
-        }),
+        body: JSON.stringify({ titre: titre.trim(), participants }),
       })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Erreur lors du tirage')
+      }
 
-      const token = encodeAssignments(assignments)
-      const params = new URLSearchParams({ d: token })
-      params.set('titre', titreEffectif)
-      router.push(`/tirage?${params.toString()}`)
+      router.push(`/tirage/${data.drawId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors du tirage')
     } finally {
@@ -119,24 +79,6 @@ export function ParticipantForm() {
             onChange={e => setTitre(e.target.value)}
             className="text-base"
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-gray-700">Votre email (organisateur)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Input
-            type="email"
-            placeholder="contact@exemple.com"
-            value={organizerEmail}
-            onChange={e => setOrganizerEmail(e.target.value)}
-            className="text-base"
-          />
-          <p className="mt-2 text-xs text-gray-400">
-            Vous recevrez la liste complète du tirage par email.
-          </p>
         </CardContent>
       </Card>
 
@@ -194,14 +136,9 @@ export function ParticipantForm() {
         </CardContent>
       </Card>
 
-      {relevantLastYearPairs.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-          <History className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            {relevantLastYearPairs.length} paire{relevantLastYearPairs.length > 1 ? 's' : ''} de l&apos;an dernier ({currentYear - 1}) seront évitées automatiquement.
-          </span>
-        </div>
-      )}
+      <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+        Les paires identiques à ton dernier tirage ({currentYear - 1}) seront évitées automatiquement.
+      </p>
 
       <Button
         onClick={lancerTirage}
@@ -209,7 +146,7 @@ export function ParticipantForm() {
         className="w-full bg-red-500 py-6 text-lg hover:bg-red-600 disabled:opacity-40"
       >
         {sending ? (
-          <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Envoi en cours...</>
+          <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Création en cours...</>
         ) : (
           <><Shuffle className="mr-2 h-5 w-5" />
           Lancer le tirage

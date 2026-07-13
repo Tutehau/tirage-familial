@@ -5,8 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Gift, Lock, Loader2 } from 'lucide-react'
-import type { Assignment } from '@/lib/draw-engine'
-import { findMyReceiver } from '@/lib/encoding'
 
 type State =
   | { status: 'idle' }
@@ -14,51 +12,36 @@ type State =
   | { status: 'revealed'; receiverName: string; participantName: string }
   | { status: 'error'; message: string }
 
-export function RevealCard({ assignments, titre }: { assignments: Assignment[]; titre: string }) {
+export function RevealCard({ drawId }: { drawId: string }) {
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
   const [state, setState] = useState<State>({ status: 'idle' })
 
   async function chercher() {
     const trimmedName = name.trim()
-    const trimmedEmail = email.trim()
 
     if (!trimmedName) {
       setState({ status: 'error', message: 'Entre ton prénom.' })
-      return
-    }
-    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setState({ status: 'error', message: 'Entre une adresse email valide.' })
-      return
-    }
-
-    const receiverName = findMyReceiver(assignments, trimmedName)
-    if (!receiverName) {
-      setState({ status: 'error', message: `Prénom "${trimmedName}" non trouvé. Vérifie l'orthographe.` })
       return
     }
 
     setState({ status: 'sending' })
 
     try {
-      const res = await fetch('/api/envoyer-email', {
+      const res = await fetch(`/api/tirage/${drawId}/reveal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'participant',
-          participantName: trimmedName,
-          participantEmail: trimmedEmail,
-          receiverName,
-          titre,
-        }),
+        body: JSON.stringify({ name: trimmedName }),
       })
+      const data = await res.json()
 
-      if (!res.ok) throw new Error('Échec envoi email')
+      if (!res.ok || !data.ok) {
+        setState({ status: 'error', message: data.error || 'Erreur lors de la révélation' })
+        return
+      }
 
-      setState({ status: 'revealed', receiverName, participantName: trimmedName })
+      setState({ status: 'revealed', receiverName: data.receiver, participantName: trimmedName })
     } catch {
-      // On affiche quand même le résultat même si l'email échoue
-      setState({ status: 'revealed', receiverName, participantName: trimmedName })
+      setState({ status: 'error', message: 'Erreur réseau, réessaie.' })
     }
   }
 
@@ -96,7 +79,7 @@ export function RevealCard({ assignments, titre }: { assignments: Assignment[]; 
           <Gift className="mx-auto mb-3 h-10 w-10 text-red-400" />
           <h2 className="text-xl font-semibold text-gray-800">Qui est ton destinataire ?</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Entre ton prénom et ton email pour découvrir à qui tu offres un cadeau
+            Entre ton prénom pour découvrir à qui tu offres un cadeau
           </p>
         </div>
 
@@ -107,16 +90,6 @@ export function RevealCard({ assignments, titre }: { assignments: Assignment[]; 
           onKeyDown={handleKeyDown}
           className="text-base"
           autoFocus
-          disabled={state.status === 'sending'}
-        />
-
-        <Input
-          type="email"
-          placeholder="Ton adresse email..."
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="text-base"
           disabled={state.status === 'sending'}
         />
 

@@ -1,9 +1,12 @@
+import 'server-only'
 import nodemailer from 'nodemailer'
+
+const port = Number(process.env.SMTP_PORT ?? 587)
 
 export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT ?? 587),
-  secure: false,
+  port,
+  secure: port === 465, // TLS implicite sur 465, STARTTLS sur les autres ports (587...)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Copy, Check } from 'lucide-react'
 
@@ -43,6 +43,24 @@ export function SharePanel({ url }: { url: string }) {
           )}
         </Button>
       </div>
+      <p className="mt-2 text-xs text-green-600">
+        Chaque personne devra se connecter (ou créer un compte) puis saisir son prénom — seul son
+        propre résultat lui sera montré.
+      </p>
     </div>
   )
+}
+
+function subscribe() {
+  return () => {}
+}
+
+export function ShareLink({ drawId }: { drawId: string }) {
+  const origin = useSyncExternalStore(
+    subscribe,
+    () => window.location.origin,
+    () => ''
+  )
+  if (!origin) return null
+  return <SharePanel url={`${origin}/tirage/${drawId}`} />
 }
